@@ -1,0 +1,40 @@
+body {
+  margin: 0;
+  padding: 0;
+  outline: 0;
+
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+}
+
+canvas {
+  display: block;
+}
+
+#inventory {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 5px;
+}
+
+#inventory .row {
+  display: flex;
+  flex-direction: row;
+}
+
+.item {
+  width: 32px;
+  height: 32px;
+  margin: 2px;
+  background-color: rgba(43, 56, 101, 0.9);
+  border-radius: 5px;
+}
+
+.item.selected {
+  background-color: rgba(250, 229, 93, 0.9);
+}
+
+/* UTILITY */
+.hide {
+  visibility: hidden;
+}
