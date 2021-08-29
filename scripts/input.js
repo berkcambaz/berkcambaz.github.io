@@ -51,8 +51,8 @@ function Input() {
       ev.preventDefault();
 
       const rect = renderer.getCanvas().getBoundingClientRect();
-      this.mouse.x = ev.originalEvent.touches[0].clientX || ev.originalEvent.changedTouches[0].clientX - rect.left;
-      this.mouse.y = ev.originalEvent.touches[0].clientY || ev.originalEvent.changedTouches[0].clientY - rect.top;
+      this.mouse.x = ev.originalEvent.touches[0].clientX - rect.left;
+      this.mouse.y = ev.originalEvent.touches[0].clientY - rect.top;
 
       this.mouse.pressed = true;
     })
