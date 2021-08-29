@@ -2,68 +2,119 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    <link rel="stylesheet" href="/styles/main.css">
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crewlands</title>
+  <link rel="stylesheet" href="/styles/main.css">
 </head>
 
 <body>
-    <canvas id="main" width="1920" height="1080"></canvas>
+  <canvas id="main"></canvas>
 
-    <div id="inventory">
-        <div id="row0" class="row">
-            <div id="item0" class="item selected"></div>
-            <div id="item1" class="item"></div>
-            <div id="item2" class="item"></div>
-            <div id="item3" class="item"></div>
-            <div id="item4" class="item"></div>
-            <div id="item5" class="item"></div>
-            <div id="item6" class="item"></div>
-            <div id="item7" class="item"></div>
-            <div id="item8" class="item"></div>
-            <div id="item9" class="item"></div>
-        </div>
-        <div id="row1" class="row hide">
-            <div id="item10" class="item"></div>
-            <div id="item11" class="item"></div>
-            <div id="item12" class="item"></div>
-            <div id="item13" class="item"></div>
-            <div id="item14" class="item"></div>
-            <div id="item15" class="item"></div>
-            <div id="item16" class="item"></div>
-            <div id="item17" class="item"></div>
-            <div id="item18" class="item"></div>
-            <div id="item19" class="item"></div>
-        </div>
-        <div id="row2" class="row hide">
-            <div id="item20" class="item"></div>
-            <div id="item21" class="item"></div>
-            <div id="item22" class="item"></div>
-            <div id="item23" class="item"></div>
-            <div id="item24" class="item"></div>
-            <div id="item25" class="item"></div>
-            <div id="item26" class="item"></div>
-            <div id="item27" class="item"></div>
-            <div id="item28" class="item"></div>
-            <div id="item29" class="item"></div>
-        </div>
-        <div id="row3" class="row hide">
-            <div id="item30" class="item"></div>
-            <div id="item31" class="item"></div>
-            <div id="item32" class="item"></div>
-            <div id="item33" class="item"></div>
-            <div id="item34" class="item"></div>
-            <div id="item35" class="item"></div>
-            <div id="item36" class="item"></div>
-            <div id="item37" class="item"></div>
-            <div id="item38" class="item"></div>
-            <div id="item39" class="item"></div>
-        </div>
+  <div id="panel--top" class="hide">
+    <img id="country_image" class="panel--top__country-img" src="/sprites/army_green_big.png">
+    <div class="panel--top__info">
+      <div>
+        <div class="panel--top__text">Gold: </div>
+        <div id="gold_text" class="panel--top__value">0</div>
+      </div>
+      <div>
+        <div class="panel--top__text">Income: </div>
+        <div id="income_text" class="panel--top__value">0</div>
+      </div>
+      <div>
+        <div class="panel--top__text">Army: </div>
+        <div id="army_text" class="panel--top__value">0</div>
+      </div>
+      <div>
+        <div class="panel--top__text">Manpower: </div>
+        <div id="manpower_text" class="panel--top__value">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel--side" class="hide">
+    <div class="panel--side__text-container">
+      <div id="province_name">- Green's Province</div>
+      <div id="occupied_name">- Occupied by Red</div>
+      <div id="landmark_name">- No Landmark</div>
+      <div id="army_name">- No Army</div>
     </div>
 
-    <script src="/scripts/main.js" type="module"></script>
+    <div class="panel--side__action-container">
+      <div class="panel--side__action">
+        <img class="panel--side__action__img" src="/sprites/army_green_big.png">
+        <div class="panel--side__action__overlay"></div>
+      </div>
+
+      <div class="panel--side__action">
+        <img class="panel--side__action__img" src="/sprites/army_purple_big.png">
+        <div class="panel--side__action__overlay"></div>
+      </div>
+
+      <div class="panel--side__action">
+        <img class="panel--side__action__img" src="/sprites/army_red_big.png">
+        <div class="panel--side__action__overlay"></div>
+      </div>
+
+      <div class="panel--side__action">
+        <img class="panel--side__action__img" src="/sprites/army_yellow_big.png">
+        <div class="panel--side__action__overlay"></div>
+      </div>
+
+      <div class="panel--side__action">
+        <img class="panel--side__action__img" src="/sprites/landmark_capital.png">
+        <div class="panel--side__action__overlay"></div>
+      </div>
+
+      <div class="panel--side__action">
+        <img class="panel--side__action__img" src="/sprites/landmark_church.png">
+        <div class="panel--side__action__overlay"></div>
+      </div>
+
+      <div class="panel--side__action">
+        <img class="panel--side__action__img" src="/sprites/landmark_house.png">
+        <div class="panel--side__action__overlay"></div>
+      </div>
+
+      <div class="panel--side__action">
+        <img class="panel--side__action__img" src="/sprites/landmark_tower.png">
+        <div class="panel--side__action__overlay"></div>
+      </div>
+
+      <div class="panel--side__action">
+        <img class="panel--side__action__img" src="/sprites/demolish.png">
+        <div class="panel--side__action__overlay"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel--bottom">
+    <div class="panel--bottom__col">
+      <input id="world_width" class="panel--bottom__input" type="text" value="10" placeholder="Width...">
+      <input id="world_height" class="panel--bottom__input" type="text" value="10" placeholder="Height...">
+      <button id="generate_button">Generate</button>
+      <button id="start_button">Start</button>
+      <div class="panel--bottom__colors">
+        <button id="green_button" class="green">G</button>
+        <button id="purple_button" class="purple">P</button>
+        <button id="red_button" class="red">R</button>
+        <button id="yellow_button" class="yellow">Y</button>
+      </div>
+    </div>
+    <div class="panel--bottom__col center">
+      <div>Round</div>
+      <div id="round_text">0</div>
+    </div>
+  </div>
+
+  <div id="chat" class="hide">
+    <div id="chat_container" class="chat__container"></div>
+    <input id="chat_input" class="chat__input" type="text" placeholder="Type something...">
+  </div>
+
+  <script src="/scripts/main.js" type="module"></script>
 </body>
 
 </html>

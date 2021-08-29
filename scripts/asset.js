@@ -4,14 +4,14 @@ function Asset() {
   this.loadSprites = (callback) => {
     let spriteCount = Object.keys(sprites).length;
     let loadedSpriteCount = 0;
-    let id = 0;
 
     for (const key in sprites) {
+      const src = "/sprites" + sprites[key].path + key + ".png";
       const img = new Image();
       img.onload = () => { if (++loadedSpriteCount === spriteCount) callback(); };
-      img.src = "/sprites" + (sprites[key].path === "/" ? sprites[key].path : sprites[key].path + "/") + key + ".png";
+      img.src = src;
       sprites[key].img = img;
-      sprites[key].id = id++;
+      sprites[key].path = src;
     }
   }
 

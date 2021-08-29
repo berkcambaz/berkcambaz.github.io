@@ -1,1 +1,0 @@
-export const TILE_MODE = { BREAK: 0, PLACE: 1 };

@@ -1,75 +1,36 @@
-import { tilemap } from "./tilemap.js";
-import { player } from "./entities/player.js";
+import { game } from "./game.js";
+import { renderer } from "./renderer.js";
 import { asset } from "./asset.js";
 import { input } from "./input.js";
-import { ui } from "./ui.js";
+import { ui } from "./ui/ui.js";
+import { camera } from "./camera.js";
+
+window.__DEV__ = true;
 
 function init(callback) {
-  const calls = 2;
-  let callsDone = 0;
+  const todo = 2;
+  let done = 0;
 
-  asset.loadSprites(() => { if (++callsDone === calls) callback(); });
-  asset.loadSounds(() => { if (++callsDone === calls) callback() });
+  asset.loadSprites(() => { if (++done === todo) callback(); });
+  asset.loadSounds(() => { if (++done === todo) callback(); });
+}
+
+function loop() {
+  window.requestAnimationFrame(loop);
+
+  // UPDATE \\
+
+
+  // RENDER \\
+  renderer.render();
 }
 
 init(() => {
-  tilemap.generate(32, 32);
+  input.init();
+  ui.init();
+  game.generate(4, 10, 10);
 
-  /** @type {HTMLCanvasElement} */
-  const canvas = document.getElementById("main");
-  const ctx = canvas.getContext("2d");
+  camera.processZoom(0);
 
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-
-  let dt = 1000 / 30;
-
-  let currentTime = 0;
-  let accumulator = 0;
-
-  let refreshCount = 0;
-  let renders = 0;
-  let updates = 0;
-
-  function loop(newTime) {
-    requestAnimationFrame(loop);
-
-    //if (newTime / 1000 >= refreshCount + 1) {
-    //  refreshCount++;
-    //  console.log("FPS: " + renders);
-    //  console.log("Ticks: " + updates);
-    //  renders = 0;
-    //  updates = 0;
-    //}
-
-    let frameTime = newTime - currentTime;
-    currentTime = newTime;
-    accumulator += frameTime;
-
-    while (accumulator >= dt) {
-      update();
-      updates++;
-      accumulator -= dt;
-    }
-
-    let alpha = accumulator / dt;
-
-    render(alpha);
-    renders++;
-  }
-
-  function render(alpha) {
-    tilemap.render(ctx);
-    player.render(ctx, alpha);
-  }
-
-  function update() {
-    tilemap.update();
-    player.update();
-    ui.update();
-
-    input.update();
-  }
-
-  requestAnimationFrame(loop);
+  window.requestAnimationFrame(loop);
 });

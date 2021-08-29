@@ -1,78 +1,95 @@
+import { camera } from "./camera.js";
+import { renderer } from "./renderer.js";
+import { tilemap } from "./tilemap.js";
+import { panelSide } from "./ui/panel_side.js";
+import { panelTop } from "./ui/panel_top.js";
+import { util } from "./util.js";
+
 function Input() {
-  const keys = [];
-  const keyPressed = [];
-  const keyReleased = [];
+  this.mouse = { x: 0, y: 0, pressed: false, moved: false };
 
-  this.mouse = { x: 0, y: 0, pressed: false };
+  this.init = function () {
+    const canvas = renderer.getCanvas();
+    canvas.addEventListener("mousemove", (ev) => {
+      if (this.mouse.pressed) {
+        camera.x += (this.mouse.x - ev.x) / camera.zoom;
+        camera.y += (this.mouse.y - ev.y) / camera.zoom;
 
-  let keyId = 0;
-  this.KEY_UP = keyId++;
-  this.KEY_DOWN = keyId++;
-  this.KEY_LEFT = keyId++;
-  this.KEY_RIGHT = keyId++;
-  this.KEY_JUMP = keyId++;
-  this.KEY_BREAK = keyId++;
-  this.KEY_PLACE = keyId++;
-  this.KEY_INVENTORY = keyId++;
-  const keyToId = {
-    "KeyW": this.KEY_UP,
-    "KeyS": this.KEY_DOWN,
-    "KeyA": this.KEY_LEFT,
-    "KeyD": this.KEY_RIGHT,
-    "Space": this.KEY_JUMP,
-    "Digit1": this.KEY_BREAK,
-    "Digit2": this.KEY_PLACE,
-    "KeyE": this.KEY_INVENTORY
-  };
+        this.mouse.moved = true;
+      }
 
-  for (let i = 0; i < keyId; ++i) keys[i] = false;
-  for (let i = 0; i < keyId; ++i) keyPressed[i] = false;
-  for (let i = 0; i < keyId; ++i) keyReleased[i] = true;
+      this.mouse.x = ev.x;
+      this.mouse.y = ev.y;
 
-  window.addEventListener("keydown", (ev) => {
-    const keyId = keyToId[ev.code];
+      tilemap.highlightTile(util.worldToTilePos(this.mouse.x, this.mouse.y));
+    });
 
-    keys[keyId] = true;
-    if (keyReleased[keyId]) {
-      keyPressed[keyId] = true
-      keyReleased[keyId] = false;
-    };
-  });
+    canvas.addEventListener("touchmove", (ev) => {
+      ev.preventDefault();
 
-  window.addEventListener("keyup", (ev) => {
-    const keyId = keyToId[ev.code];
+      const x = ev.touches[0].clientX;
+      const y = ev.touches[0].clientY;
 
-    keys[keyId] = false;
-    keyReleased[keyId] = true;
-  });
+      if (this.mouse.pressed) {
+        camera.x += (this.mouse.x - x) / camera.zoom;
+        camera.y += (this.mouse.y - y) / camera.zoom;
 
-  window.addEventListener("mousedown", (ev) => {
-    this.mouse.pressed = true;
-    this.mouse.x = ev.x;
-    this.mouse.y = ev.y;
-  });
+        this.mouse.moved = true;
+      }
 
-  window.addEventListener("mouseup", (ev) => {
-    this.mouse.pressed = false;
-    this.mouse.x = ev.x;
-    this.mouse.y = ev.y;
-  });
+      this.mouse.x = x;
+      this.mouse.y = y;
 
-  window.addEventListener("mousemove", (ev) => {
-    this.mouse.x = ev.x;
-    this.mouse.y = ev.y;
-  });
+      tilemap.highlightTile(util.worldToTilePos(this.mouse.x, this.mouse.y));
+    })
 
-  this.getKey = (keyId) => {
-    return keys[keyId];
-  }
+    canvas.addEventListener("mousedown", (ev) => {
+      this.mouse.pressed = true;
+    });
 
-  this.getKeyDown = (keyId) => {
-    return keyPressed[keyId];
-  }
+    canvas.addEventListener("touchstart", (ev) => {
+      ev.preventDefault();
 
-  this.update = () => {
-    for (let i = 0; i < keyPressed.length; ++i) keyPressed[i] = false;
+      const rect = renderer.getCanvas().getBoundingClientRect();
+      this.mouse.x = ev.touches[0].clientX - rect.left;
+      this.mouse.y = ev.touches[0].clientY - rect.top;
+
+      this.mouse.pressed = true;
+    })
+
+    canvas.addEventListener("mouseup", (ev) => {
+      if (!this.mouse.moved)
+        panelSide.toggle(util.worldPosToProvince(this.mouse.x, this.mouse.y));
+
+      this.mouse.pressed = false;
+      this.mouse.moved = false;
+    });
+
+    canvas.addEventListener("touchend", (ev) => {
+      ev.preventDefault();
+
+      if (!this.mouse.moved)
+        panelSide.toggle(util.worldPosToProvince(this.mouse.x, this.mouse.y));
+
+      this.mouse.pressed = false;
+      this.mouse.moved = false;
+    })
+
+    canvas.addEventListener("wheel", (ev) => {
+      camera.processZoom(ev.wheelDelta);
+
+      tilemap.highlightTile(util.worldToTilePos(this.mouse.x, this.mouse.y));
+    });
+
+    canvas.addEventListener("mouseleave", (ev) => {
+      this.mouse.pressed = false;
+    })
+
+    canvas.addEventListener("touchcancel", (ev) => {
+      ev.preventDefault();
+
+      this.mouse.pressed = false;
+    })
   }
 }
 
