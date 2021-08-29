@@ -27,8 +27,8 @@ function Input() {
     canvas.addEventListener("touchmove", (ev) => {
       ev.preventDefault();
 
-      const x = ev.originalEvent.touches[0].clientX || ev.originalEvent.changedTouches[0].clientX;
-      const y = ev.originalEvent.touches[0].clientY || ev.originalEvent.changedTouches[0].clientY;
+      const x = ev.originalEvent.touches[0].clientX;
+      const y = ev.originalEvent.touches[0].clientY;
 
       if (this.mouse.pressed) {
         camera.x += (this.mouse.x - x) / camera.zoom;
