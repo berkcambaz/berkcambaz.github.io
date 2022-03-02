@@ -1,0 +1,16 @@
+{
+  "name": "Lords and Lands",
+  "short_name": "Lords and Lands",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/res/sprites/army/green_big.png",
+      "type": "image/png",
+      "sizes": "128x128"
+    }
+  ]
+}
