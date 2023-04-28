@@ -1,1 +1,0 @@
-import{c as e}from"./createReactComponent-3bc6d6fd.js";var r=e("arrow-right","IconArrowRight",[["path",{d:"M5 12l14 0",key:"svg-0"}],["path",{d:"M13 18l6 -6",key:"svg-1"}],["path",{d:"M13 6l6 6",key:"svg-2"}]]),s=e("message-circle-2","IconMessageCircle2",[["path",{d:"M3 20l1.3 -3.9a9 8 0 1 1 3.4 2.9l-4.7 1",key:"svg-0"}]]);export{s as I,r as a};
