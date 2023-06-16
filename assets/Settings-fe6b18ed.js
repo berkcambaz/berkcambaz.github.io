@@ -1,1 +1,0 @@
-import{j as e,a}from"./index-397ef9b3.js";import{F as r,T as t}from"./Flex-57308d9c.js";import{T as n}from"./TextInput-34dc1b06.js";import"./Input.styles-cddcdbe6.js";function s(){return e(r,{direction:"column",align:"center",gap:"md",children:a(r,{align:"center",gap:"md",children:[e(t,{children:"Player Name:"}),e(n,{placeholder:"Player Name..."})]})})}export{s as default};
