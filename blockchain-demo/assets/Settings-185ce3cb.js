@@ -1,1 +1,0 @@
-import{j as e,d as t,C as r,F as s,c as n}from"./index-090af780.js";import{B as o}from"./Button-c952d76c.js";function d(){return e(t,{children:e(r,{withBorder:!0,children:e(s,{direction:"column",gap:"xs",children:e(o,{onClick:()=>{n.getState().reset()},children:"Reset Blockchain"})})})})}export{d as default};
