@@ -1,0 +1,1 @@
+import{j as e,F as t,h as r}from"./index-40a7cff9.js";import{u as s}from"./gameStore-1c45f400.js";function n(){return e.jsx(t,{direction:"column",gap:"md",mx:"md",my:80,children:e.jsx(r,{onClick:()=>s.getState().reset(),variant:"default",children:"Reset Progress"})})}export{n as default};
