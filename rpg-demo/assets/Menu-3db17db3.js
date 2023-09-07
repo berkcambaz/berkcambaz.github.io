@@ -1,1 +1,0 @@
-import{j as e,F as t,k as r,n as s}from"./index-350f19dc.js";function a(){return e.jsx(t,{direction:"column",gap:"md",mx:"md",my:80,children:e.jsx(r,{onClick:()=>s.getState().reset(),variant:"default",children:"Reset Progress"})})}export{a as default};
