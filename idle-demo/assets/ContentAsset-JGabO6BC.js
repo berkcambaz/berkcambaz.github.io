@@ -1,0 +1,1 @@
+import{l as s,a5 as r,E as n}from"./index--tMnp0QA.js";function l({size:e=32,image:t,emoji:a}){return s.jsxs(s.Fragment,{children:[t&&s.jsx(r,{src:t,w:e,h:e,style:{imageRendering:"pixelated"},draggable:!1}),a&&s.jsx(n,{emoji:a,size:e})]})}export{l as C};
