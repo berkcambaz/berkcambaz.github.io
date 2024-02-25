@@ -1,1 +1,0 @@
-import{r as s}from"./index-LKG6ecAX.js";function i(l=!1,n){const{onOpen:e,onClose:r}=n||{},[u,o]=s.useState(l),a=s.useCallback(()=>{o(t=>t||(e==null||e(),!0))},[e]),c=s.useCallback(()=>{o(t=>t&&(r==null||r(),!1))},[r]),f=s.useCallback(()=>{u?c():a()},[c,a,u]);return[u,{open:a,close:c,toggle:f}]}export{i as u};
