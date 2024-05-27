@@ -1,1 +1,0 @@
-import{j as o}from"./index-DsSBX80C.js";import{C as i}from"./ComingSoonCard-CnNM2zAA.js";import{m as t}from"./motion-C1-VN7ep.js";function n(){return o.jsx(t.div,{initial:{opacity:0},animate:{opacity:1},children:o.jsx(i,{})})}export{n as default};
