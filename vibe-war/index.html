@@ -1,0 +1,2088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2D Top-Down Shooter</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            touch-action: none; /* Prevent browser default touch actions */
+        }
+        canvas {
+            display: block;
+        }
+        #game-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            max-width: 180px;
+        }
+        #minimap-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 200px;
+            height: 200px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border: 2px solid white;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        #minimap {
+            width: 100%;
+            height: 100%;
+        }
+        #respawn-timer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 32px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 20px 40px;
+            border-radius: 10px;
+            display: none;
+            text-align: center;
+        }
+        .status-message {
+            color: #ff9800;
+            font-style: italic;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        
+        /* Mobile controls styles */
+        #virtual-joystick {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 120px;
+            height: 120px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 60px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            touch-action: none;
+            display: none; /* Hidden by default, shown on mobile */
+        }
+        
+        #joystick-knob {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background-color: rgba(255, 255, 255, 0.5);
+            border-radius: 25px;
+            top: 35px;
+            left: 35px;
+            touch-action: none;
+        }
+        
+        /* Removed shoot button styles */
+        
+        /* Mobile-specific adjustments */
+        @media (max-width: 768px) {
+            #game-info {
+                font-size: 12px;
+                padding: 5px;
+            }
+            
+            #minimap-container {
+                width: 120px;
+                height: 120px;
+            }
+            
+            #virtual-joystick {
+                display: block;
+            }
+            
+            #respawn-timer {
+                font-size: 24px;
+                padding: 15px 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="game-info">
+        <div>Player Health: <span id="player-health">100</span></div>
+        <div>Team 1: <span id="team1-count">50</span></div>
+        <div>Team 2: <span id="team2-count">50</span></div>
+        <div>Capture Progress - Team 1: <span id="team1-capture">0%</span> <span id="team1-status" class="status-message"></span></div>
+        <div>Capture Progress - Team 2: <span id="team2-capture">0%</span> <span id="team2-status" class="status-message"></span></div>
+    </div>
+    <div id="minimap-container">
+        <canvas id="minimap"></canvas>
+    </div>
+    <div id="respawn-timer">
+        Respawning in: <span id="respawn-seconds">10</span> seconds
+    </div>
+    
+    <!-- Mobile controls - removed shoot button -->
+    <div id="virtual-joystick">
+        <div id="joystick-knob"></div>
+    </div>
+
+    <script>
+        // Game setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Minimap setup
+        const minimapCanvas = document.getElementById('minimap');
+        const minimapCtx = minimapCanvas.getContext('2d');
+        minimapCanvas.width = 200;
+        minimapCanvas.height = 200;
+
+        // Game constants
+        const GAME_WIDTH = 4000;
+        const GAME_HEIGHT = 4000;
+        const PLAYER_SPEED = 5;
+        const BOT_SPEED = 2;
+        const BULLET_SPEED = 10;
+        const PLAYER_RADIUS = 15;
+        const BOT_RADIUS = 12;
+        const BULLET_RADIUS = 3;
+        const SHOOTING_COOLDOWN = 500; // ms
+        const DETECTION_RADIUS = 400;
+        
+        // Bot amount constants
+        const BOTS_PER_TEAM_1 = 100; // Number of bots for team 1
+        const BOTS_PER_TEAM_2 = 100; // Number of bots for team 2
+        
+        // Color constants
+        const COLOR_TEAM_1 = '#3498db'; // Blue
+        const COLOR_TEAM_2 = '#e74c3c'; // Red
+        const COLOR_BACKGROUND = '#2c3e50'; // Dark blue-gray
+        const COLOR_GRID = '#555555'; // Gray
+        const COLOR_BORDER = '#ffffff'; // White
+        const COLOR_TEXT = '#ffffff'; // White
+        const COLOR_WARNING = '#ff9800'; // Orange
+        const COLOR_HEALTH_BACKGROUND = 'black';
+        const COLOR_HEALTH_BAR = 'green';
+        const COLOR_GAME_OVER_BG = 'rgba(0, 0, 0, 0.7)';
+        const COLOR_VIEWPORT = 'yellow';
+        
+        // Team colors with transparency
+        const COLOR_TEAM_1_LIGHT = `${COLOR_TEAM_1}20`; // 20% opacity
+        const COLOR_TEAM_1_MEDIUM = `${COLOR_TEAM_1}40`; // 40% opacity
+        const COLOR_TEAM_1_STRONG = `${COLOR_TEAM_1}70`; // 70% opacity
+        const COLOR_TEAM_2_LIGHT = `${COLOR_TEAM_2}20`; // 20% opacity
+        const COLOR_TEAM_2_MEDIUM = `${COLOR_TEAM_2}40`; // 40% opacity
+        const COLOR_TEAM_2_STRONG = `${COLOR_TEAM_2}70`; // 70% opacity
+        
+        // Respawn constants
+        const RESPAWN_CIRCLE_RADIUS = 200;
+        const RESPAWN_TIME = 10000; // 10 seconds in ms
+        
+        // Multiple respawn circles for each team
+        const RESPAWN_CIRCLES_1 = [
+            { x: 400, y: 400, captured: false, captureProgress: 0 },
+            { x: 400, y: GAME_HEIGHT - 400, captured: false, captureProgress: 0 },
+            { x: 800, y: GAME_HEIGHT/2, captured: false, captureProgress: 0 }
+        ]; // Team 1 respawn circles
+        
+        const RESPAWN_CIRCLES_2 = [
+            { x: GAME_WIDTH - 400, y: 400, captured: false, captureProgress: 0 },
+            { x: GAME_WIDTH - 400, y: GAME_HEIGHT - 400, captured: false, captureProgress: 0 },
+            { x: GAME_WIDTH - 800, y: GAME_HEIGHT/2, captured: false, captureProgress: 0 }
+        ]; // Team 2 respawn circles
+        
+        // Capture constants
+        const CAPTURE_TIME = 15000; // 15 seconds to capture
+        const CAPTURE_UNITS_REQUIRED = 1; // Units needed to start capturing
+        const MAX_CAPTURE_PROGRESS = 100; // 100%
+
+        // Game state
+        let entities = {
+            player: null,
+            bots: [],
+            bullets: [],
+            deadBots: [] // For tracking dead bots waiting to respawn
+        };
+        let camera = {
+            x: 0,
+            y: 0
+        };
+        let keys = {
+            w: false,
+            a: false,
+            s: false,
+            d: false
+        };
+        let lastTime = 0;
+        let gameOver = false;
+        
+        // Player respawn tracking
+        let playerRespawn = {
+            dead: false,
+            timeOfDeath: 0
+        };
+        
+        // Capture progress tracking - modified to track overall progress
+        let captureProgress = {
+            team1Captured: 0, // Number of Team 2's circles captured by Team 1
+            team2Captured: 0  // Number of Team 1's circles captured by Team 2
+        };
+        let lastCaptureCheck = 0;
+
+        // Classes
+        class Entity {
+            constructor(x, y, radius, color) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.color = color;
+                this.health = 100;
+                this.dead = false;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x - camera.x, this.y - camera.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                
+                // Health bar
+                ctx.fillStyle = COLOR_HEALTH_BACKGROUND;
+                ctx.fillRect(this.x - camera.x - this.radius, this.y - camera.y - this.radius - 10, this.radius * 2, 5);
+                ctx.fillStyle = COLOR_HEALTH_BAR;
+                ctx.fillRect(this.x - camera.x - this.radius, this.y - camera.y - this.radius - 10, (this.radius * 2) * (this.health / 100), 5);
+            }
+
+            takeDamage(damage) {
+                this.health -= damage;
+                if (this.health <= 0) {
+                    this.dead = true;
+                    
+                    // If this is a bot, add to the dead bots queue for respawning
+                    if (this instanceof Bot) {
+                        entities.deadBots.push({
+                            bot: this,
+                            timeOfDeath: Date.now(),
+                            originalX: this.x,
+                            originalY: this.y
+                        });
+                    } 
+                    // If this is the player, set respawn timer
+                    else if (this instanceof Player) {
+                        playerRespawn.dead = true;
+                        playerRespawn.timeOfDeath = Date.now();
+                    }
+                }
+            }
+
+            // Check if this entity collides with another entity
+            collidesWith(entity) {
+                const distance = Math.hypot(this.x - entity.x, this.y - entity.y);
+                return distance < this.radius + entity.radius;
+            }
+        }
+
+        class Player extends Entity {
+            constructor(x, y, team) {
+                super(x, y, PLAYER_RADIUS, team === 1 ? COLOR_TEAM_1 : COLOR_TEAM_2);
+                this.team = team;
+                this.lastShot = 0;
+                this.isMoving = false;
+            }
+
+            update(currentTime) {
+                this.isMoving = false;
+                
+                if (isMobile && joystickActive) {
+                    // Use joystick data for mobile movement
+                    const speedMultiplier = 0.7; // Adjust this for mobile sensitivity
+                    
+                    // Calculate movement based on joystick position
+                    if (Math.abs(joystickData.delta.x) > 0.1 || Math.abs(joystickData.delta.y) > 0.1) {
+                        const moveX = joystickData.delta.x * PLAYER_SPEED * speedMultiplier;
+                        const moveY = joystickData.delta.y * PLAYER_SPEED * speedMultiplier;
+                        
+                        // Apply movement with boundary checks
+                        if (this.x + moveX > this.radius && this.x + moveX < GAME_WIDTH - this.radius) {
+                            this.x += moveX;
+                            this.isMoving = true;
+                        }
+                        
+                        if (this.y + moveY > this.radius && this.y + moveY < GAME_HEIGHT - this.radius) {
+                            this.y += moveY;
+                            this.isMoving = true;
+                        }
+                    }
+                } else {
+                    // Player keyboard movement (existing code)
+                    if (keys.w && this.y > this.radius) {
+                        this.y -= PLAYER_SPEED;
+                        this.isMoving = true;
+                    }
+                    if (keys.s && this.y < GAME_HEIGHT - this.radius) {
+                        this.y += PLAYER_SPEED;
+                        this.isMoving = true;
+                    }
+                    if (keys.a && this.x > this.radius) {
+                        this.x -= PLAYER_SPEED;
+                        this.isMoving = true;
+                    }
+                    if (keys.d && this.x < GAME_WIDTH - this.radius) {
+                        this.x += PLAYER_SPEED;
+                        this.isMoving = true;
+                    }
+                }
+
+                // Auto shoot when not moving
+                if (!this.isMoving && currentTime - this.lastShot > SHOOTING_COOLDOWN) {
+                    let target = this.findNearestEnemy();
+                    if (target) {
+                        this.shoot(target.x, target.y);
+                        this.lastShot = currentTime;
+                    }
+                }
+
+                // Update camera
+                camera.x = this.x - canvas.width / 2;
+                camera.y = this.y - canvas.height / 2;
+                
+                // Clamp camera position
+                camera.x = Math.max(0, Math.min(camera.x, GAME_WIDTH - canvas.width));
+                camera.y = Math.max(0, Math.min(camera.y, GAME_HEIGHT - canvas.height));
+
+                // Update health display
+                document.getElementById('player-health').textContent = this.health;
+            }
+
+            findNearestEnemy() {
+                let nearestEnemy = null;
+                let minDistance = Infinity;
+
+                for (let bot of entities.bots) {
+                    if (bot.team !== this.team && !bot.dead) {
+                        const distance = Math.hypot(bot.x - this.x, bot.y - this.y);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            nearestEnemy = bot;
+                        }
+                    }
+                }
+                return nearestEnemy;
+            }
+
+            shoot(targetX, targetY) {
+                const angle = Math.atan2(targetY - this.y, targetX - this.x);
+                const velocity = {
+                    x: Math.cos(angle) * BULLET_SPEED,
+                    y: Math.sin(angle) * BULLET_SPEED
+                };
+                entities.bullets.push(new Bullet(
+                    this.x, 
+                    this.y, 
+                    velocity.x,
+                    velocity.y,
+                    this.team,
+                    this
+                ));
+            }
+        }
+
+        class Bot extends Entity {
+            constructor(x, y, team) {
+                super(x, y, BOT_RADIUS, team === 1 ? COLOR_TEAM_1 : COLOR_TEAM_2);
+                this.team = team;
+                this.lastShot = 0;
+                this.target = null;
+                this.state = 'moving'; // 'moving', 'shooting', or 'occupying'
+                this.avoidanceForce = { x: 0, y: 0 }; // For collision avoidance
+                this.separationDistance = BOT_RADIUS * 2.5; // Minimum desired distance between bots
+                
+                // Circle occupation properties
+                this.occupyingCircle = null; // Reference to circle being occupied
+                this.occupyingCircleIndex = -1; // Index of circle being occupied
+                this.occupyingCircleTeam = null; // Team of circle being occupied (1 or 2)
+                
+                // Assign occupation role (50% chance to be a fighter, 50% chance to be an occupier)
+                // Increased occupier percentage to improve capture capabilities
+                this.role = Math.random() < 0.5 ? 'fighter' : 'occupier';
+                
+                // Add capture intent - even fighters can capture when they're in enemy circles
+                this.captureIntent = Math.random() < 0.7; // 70% of bots will try to capture when possible
+            }
+
+            update(currentTime) {
+                if (this.dead) return;
+
+                // If this bot is an occupier, check if it should occupy a circle
+                if (this.role === 'occupier') {
+                    // If not currently occupying a circle, or regularly re-evaluate (every 5 seconds)
+                    if (!this.occupyingCircle || Math.random() < 0.005) {
+                        this.findCircleToOccupy();
+                    }
+                    
+                    // If assigned to occupy a circle, move towards it and stay inside
+                    if (this.occupyingCircle) {
+                        const distanceToCircle = Math.hypot(
+                            this.occupyingCircle.x - this.x, 
+                            this.occupyingCircle.y - this.y
+                        );
+                        
+                        // If bot is outside circle or too close to edge, move towards center
+                        if (distanceToCircle > RESPAWN_CIRCLE_RADIUS * 0.7) {
+                            // Move toward circle center
+                            const angle = Math.atan2(
+                                this.occupyingCircle.y - this.y, 
+                                this.occupyingCircle.x - this.x
+                            );
+                            
+                            // Calculate movement with collision avoidance
+                            this.calculateAvoidanceForces();
+                            
+                            let dx = Math.cos(angle) * BOT_SPEED + this.avoidanceForce.x;
+                            let dy = Math.sin(angle) * BOT_SPEED + this.avoidanceForce.y;
+                            
+                            // Normalize if exceeds speed
+                            const speed = Math.hypot(dx, dy);
+                            if (speed > BOT_SPEED) {
+                                dx = (dx / speed) * BOT_SPEED;
+                                dy = (dy / speed) * BOT_SPEED;
+                            }
+                            
+                            this.x += dx;
+                            this.y += dy;
+                            this.state = 'moving';
+                            return;
+                        } 
+                        // If inside circle, look for enemies to shoot
+                        else {
+                            // Find nearest enemy
+                            const enemy = this.findNearestEnemyInRadius(DETECTION_RADIUS);
+                            if (enemy) {
+                                this.state = 'shooting';
+                                if (currentTime - this.lastShot > SHOOTING_COOLDOWN) {
+                                    this.shoot(enemy.x, enemy.y);
+                                    this.lastShot = currentTime;
+                                }
+                                return;
+                            } 
+                            // If no enemy in range, patrol randomly within circle
+                            else if (Math.random() < 0.02) {  // Occasionally move to patrol
+                                // Choose random point within circle
+                                const randomAngle = Math.random() * Math.PI * 2;
+                                const randomDist = Math.random() * RESPAWN_CIRCLE_RADIUS * 0.5;
+                                const targetX = this.occupyingCircle.x + Math.cos(randomAngle) * randomDist;
+                                const targetY = this.occupyingCircle.y + Math.sin(randomAngle) * randomDist;
+                                
+                                // Move toward that point
+                                const angle = Math.atan2(targetY - this.y, targetX - this.x);
+                                
+                                // Calculate movement with collision avoidance
+                                this.calculateAvoidanceForces();
+                                
+                                let dx = Math.cos(angle) * (BOT_SPEED * 0.5) + this.avoidanceForce.x;
+                                let dy = Math.sin(angle) * (BOT_SPEED * 0.5) + this.avoidanceForce.y;
+                                
+                                this.x += dx;
+                                this.y += dy;
+                                this.state = 'moving';
+                                return;
+                            }
+                            else {
+                                this.state = 'occupying';
+                                return;
+                            }
+                        }
+                    }
+                }
+                
+                // Regular fighting behavior for non-occupiers or when not occupying
+                // Find target if we don't have one or if current target is dead
+                if (!this.target || this.target.dead) {
+                    this.target = this.findTarget();
+                    this.state = 'moving';
+                }
+
+                // Even if this bot is a fighter, check if it's inside an enemy circle and can capture
+                if (this.captureIntent && this.role === 'fighter') {
+                    const enemyCircles = this.team === 1 ? RESPAWN_CIRCLES_2 : RESPAWN_CIRCLES_1;
+                    
+                    // Check if bot is in an enemy circle that's not captured
+                    for (let i = 0; i < enemyCircles.length; i++) {
+                        const circle = enemyCircles[i];
+                        if (!circle.captured) {
+                            const distanceToCircle = Math.hypot(
+                                circle.x - this.x, 
+                                circle.y - this.y
+                            );
+                            
+                            // If inside enemy circle and no immediate enemies, stay for capture
+                            if (distanceToCircle < RESPAWN_CIRCLE_RADIUS) {
+                                const enemyNearby = this.findNearestEnemyInRadius(DETECTION_RADIUS);
+                                
+                                // If there's an enemy nearby, engage with it first
+                                if (enemyNearby) {
+                                    this.target = enemyNearby;
+                                    this.state = 'shooting';
+                                    if (currentTime - this.lastShot > SHOOTING_COOLDOWN) {
+                                        this.shoot(enemyNearby.x, enemyNearby.y);
+                                        this.lastShot = currentTime;
+                                    }
+                                    return;
+                                } 
+                                // Otherwise, patrol within the circle to help capture
+                                else if (Math.random() < 0.05) {  // Occasionally move to patrol
+                                    // Choose random point to patrol within circle
+                                    const randomAngle = Math.random() * Math.PI * 2;
+                                    const randomDist = Math.random() * RESPAWN_CIRCLE_RADIUS * 0.5;
+                                    const targetX = circle.x + Math.cos(randomAngle) * randomDist;
+                                    const targetY = circle.y + Math.sin(randomAngle) * randomDist;
+                                    
+                                    // Move toward that point
+                                    const angle = Math.atan2(targetY - this.y, targetX - this.x);
+                                    
+                                    // Calculate movement with collision avoidance
+                                    this.calculateAvoidanceForces();
+                                    
+                                    let dx = Math.cos(angle) * (BOT_SPEED * 0.5) + this.avoidanceForce.x;
+                                    let dy = Math.sin(angle) * (BOT_SPEED * 0.5) + this.avoidanceForce.y;
+                                    
+                                    this.x += dx;
+                                    this.y += dy;
+                                    this.state = 'moving';
+                                    return;
+                                } else {
+                                    // Stay still to capture
+                                    this.state = 'occupying';
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // If we have a target, check if we should shoot or move
+                if (this.target) {
+                    const distance = Math.hypot(this.target.y - this.y, this.target.x - this.x);
+                    
+                    // If target is within detection range, stop and shoot
+                    if (distance < DETECTION_RADIUS) {
+                        this.state = 'shooting';
+                        if (currentTime - this.lastShot > SHOOTING_COOLDOWN) {
+                            this.shoot(this.target.x, this.target.y);
+                            this.lastShot = currentTime;
+                        }
+                    } else {
+                        // Otherwise move toward the target
+                        this.state = 'moving';
+                        // Calculate direction to target
+                        const angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+                        
+                        // Calculate base movement
+                        let dx = Math.cos(angle) * BOT_SPEED;
+                        let dy = Math.sin(angle) * BOT_SPEED;
+                        
+                        // Apply collision avoidance
+                        this.calculateAvoidanceForces();
+                        
+                        // Add avoidance forces to movement
+                        dx += this.avoidanceForce.x;
+                        dy += this.avoidanceForce.y;
+                        
+                        // Normalize movement if it exceeds normal speed
+                        const speed = Math.hypot(dx, dy);
+                        if (speed > BOT_SPEED) {
+                            dx = (dx / speed) * BOT_SPEED;
+                            dy = (dy / speed) * BOT_SPEED;
+                        }
+                        
+                        // Apply the movement
+                        const newX = this.x + dx;
+                        const newY = this.y + dy;
+                        
+                        // Check if we'd go out of bounds
+                        if (newX > 0 && newX < GAME_WIDTH) {
+                            this.x = newX;
+                        }
+                        if (newY > 0 && newY < GAME_HEIGHT) {
+                            this.y = newY;
+                        }
+                    }
+                }
+            }
+            
+            // Find a circle to occupy (prioritize defense or offense based on game state)
+            findCircleToOccupy() {
+                // Reset current occupation assignment
+                this.occupyingCircle = null;
+                this.occupyingCircleIndex = -1;
+                this.occupyingCircleTeam = null;
+                
+                const ownCircles = this.team === 1 ? RESPAWN_CIRCLES_1 : RESPAWN_CIRCLES_2;
+                const enemyCircles = this.team === 1 ? RESPAWN_CIRCLES_2 : RESPAWN_CIRCLES_1;
+                
+                let circleToOccupy = null;
+                let circleIndex = -1;
+                let circleTeam = null;
+                let bestScore = -Infinity;
+                
+                // If this bot has capture intent (more aggressive), prioritize enemy circles
+                const prioritizeCapture = this.captureIntent && Math.random() < 0.7;
+                
+                // Count how many circles each team has captured
+                const ownCirclesCaptured = (this.team === 1) ? captureProgress.team1Captured : captureProgress.team2Captured;
+                const enemyCirclesCaptured = (this.team === 1) ? captureProgress.team2Captured : captureProgress.team1Captured;
+                
+                // If enemy has captured more circles than us or this bot prioritizes capture,
+                // check enemy circles first for potential captures
+                if (prioritizeCapture || enemyCirclesCaptured > ownCirclesCaptured) {
+                    // Evaluate enemy circles for capture
+                    for (let i = 0; i < enemyCircles.length; i++) {
+                        if (enemyCircles[i].captured) continue; // Skip if already captured
+                        
+                        const circle = enemyCircles[i];
+                        const distance = Math.hypot(circle.x - this.x, circle.y - this.y);
+                        
+                        // Calculate how many of our team are already in this circle
+                        const ownTeamCount = countUnitsInCircle(circle, this.team);
+                        
+                        // Calculate how many enemies are defending this circle
+                        const enemyCount = countUnitsInCircle(circle, this.team === 1 ? 2 : 1);
+                        
+                        // Score this circle for attack
+                        let score = 0;
+                        
+                        // Base score inversely proportional to distance
+                        score += 800 / (distance + 1);
+                        
+                        // Higher score for circles with progress already
+                        const progress = this.team === 1 ? circle.captureProgress : circle.captureProgress;
+                        score += progress * 20;
+                        
+                        // Higher score if we outnumber enemies
+                        if (ownTeamCount > enemyCount) {
+                            score += 1000;
+                        } else {
+                            // Still go for it, but lower priority if close to even
+                            score += 500 - (enemyCount - ownTeamCount) * 100;
+                        }
+                        
+                        // But boost if we already have units there
+                        score += ownTeamCount * 200;
+                        
+                        // Boost for circles that are not being targeted by many units yet
+                        if (ownTeamCount < CAPTURE_UNITS_REQUIRED + 2) {
+                            score += 1000;
+                        }
+                        
+                        // Extra boost for circles with less defense
+                        if (enemyCount < 2) {
+                            score += 1500;
+                        }
+                        
+                        if (score > bestScore) {
+                            bestScore = score;
+                            circleToOccupy = circle;
+                            circleIndex = i;
+                            circleTeam = this.team === 1 ? 2 : 1;
+                        }
+                    }
+                }
+                
+                // If we haven't chosen a circle yet, or we're not prioritizing capture,
+                // check our own circles for defense
+                if (!circleToOccupy || !prioritizeCapture) {
+                    // Check our own circles for defense
+                    for (let i = 0; i < ownCircles.length; i++) {
+                        if (ownCircles[i].captured) continue; // Skip if already captured
+                        
+                        const circle = ownCircles[i];
+                        const distance = Math.hypot(circle.x - this.x, circle.y - this.y);
+                        
+                        // Calculate how many of our team are already in this circle
+                        const ownTeamCount = countUnitsInCircle(circle, this.team);
+                        
+                        // Calculate how many enemies are near this circle
+                        const enemyCount = countEnemyUnitsNearCircle(circle, this.team, DETECTION_RADIUS * 1.5);
+                        
+                        // Score this circle (prioritize threatened circles with fewer defenders)
+                        // Higher score = better to occupy
+                        let score = 0;
+                        
+                        // Base score inversely proportional to distance
+                        score += 1000 / (distance + 1);
+                        
+                        // Threatened circles get high priority
+                        if (enemyCount > 0) {
+                            score += 5000;
+                            
+                            // Even higher priority if enemies outnumber defenders
+                            if (enemyCount > ownTeamCount) {
+                                score += 3000;
+                            }
+                        }
+                        
+                        // Lower score if we already have enough units there
+                        score -= ownTeamCount * 500;
+                        
+                        if (score > bestScore) {
+                            bestScore = score;
+                            circleToOccupy = circle;
+                            circleIndex = i;
+                            circleTeam = this.team;
+                        }
+                    }
+                }
+                
+                // If still no circle to occupy, fall back to enemy circles even if we're defensive
+                if (!circleToOccupy) {
+                    // Similar enemy circle evaluation as above, but with lower scores
+                    for (let i = 0; i < enemyCircles.length; i++) {
+                        if (enemyCircles[i].captured) continue;
+                        
+                        const circle = enemyCircles[i];
+                        const distance = Math.hypot(circle.x - this.x, circle.y - this.y);
+                        
+                        let score = 700 / (distance + 1);
+                        
+                        if (score > bestScore) {
+                            bestScore = score;
+                            circleToOccupy = circle;
+                            circleIndex = i;
+                            circleTeam = this.team === 1 ? 2 : 1;
+                        }
+                    }
+                }
+                
+                // Set the circle to occupy if found
+                if (circleToOccupy) {
+                    this.occupyingCircle = circleToOccupy;
+                    this.occupyingCircleIndex = circleIndex;
+                    this.occupyingCircleTeam = circleTeam;
+                }
+            }
+            
+            calculateAvoidanceForces() {
+                // Reset avoidance force
+                this.avoidanceForce = { x: 0, y: 0 };
+                
+                // Check for nearby bots
+                for (const bot of entities.bots) {
+                    if (bot !== this && !bot.dead && bot.team === this.team) {
+                        const distance = Math.hypot(bot.x - this.x, this.y - this.y);
+                        
+                        // If bot is too close, calculate avoidance force
+                        if (distance < this.separationDistance) {
+                            // The closer they are, the stronger the force
+                            const force = (this.separationDistance - distance) / this.separationDistance;
+                            
+                            // Direction away from the other bot
+                            const angle = Math.atan2(this.y - bot.y, this.x - bot.x);
+                            
+                            // Add to avoidance force
+                            this.avoidanceForce.x += Math.cos(angle) * force * BOT_SPEED * 0.5;
+                            this.avoidanceForce.y += Math.sin(angle) * force * BOT_SPEED * 0.5;
+                        }
+                    }
+                }
+                
+                // Also avoid player if same team
+                if (entities.player && !entities.player.dead && entities.player.team === this.team) {
+                    const distance = Math.hypot(entities.player.x - this.x, this.y - this.y);
+                    if (distance < this.separationDistance) {
+                        const force = (this.separationDistance - distance) / this.separationDistance;
+                        const angle = Math.atan2(this.y - entities.player.y, this.x - entities.player.x);
+                        this.avoidanceForce.x += Math.cos(angle) * force * BOT_SPEED * 0.5;
+                        this.avoidanceForce.y += Math.sin(angle) * force * BOT_SPEED * 0.5;
+                    }
+                }
+            }
+
+            findTarget() {
+                let nearestEnemy = null;
+                let minDistance = Infinity;
+
+                // First check for player if it's on the opposite team
+                if (entities.player && entities.player.team !== this.team && !entities.player.dead) {
+                    const distance = Math.hypot(entities.player.x - this.x, entities.player.y - this.y);
+                    nearestEnemy = entities.player;
+                    minDistance = distance;
+                }
+
+                // Then check for enemy bots
+                for (let bot of entities.bots) {
+                    if (bot.team !== this.team && !bot.dead && bot !== this) {
+                        const distance = Math.hypot(bot.x - this.x, bot.y - this.y);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            nearestEnemy = bot;
+                        }
+                    }
+                }
+                return nearestEnemy;
+            }
+            
+            // Add the missing method to find enemies within a specific radius
+            findNearestEnemyInRadius(radius) {
+                let nearestEnemy = null;
+                let minDistance = radius;
+                
+                // Check player
+                if (entities.player && !entities.player.dead && entities.player.team !== this.team) {
+                    const distance = Math.hypot(entities.player.x - this.x, entities.player.y - this.y);
+                    if (distance < minDistance) {
+                        nearestEnemy = entities.player;
+                        minDistance = distance;
+                    }
+                }
+                
+                // Check enemy bots
+                for (let bot of entities.bots) {
+                    if (bot.team !== this.team && !bot.dead) {
+                        const distance = Math.hypot(bot.x - this.x, bot.y - this.y);
+                        if (distance < minDistance) {
+                            nearestEnemy = bot;
+                            minDistance = distance;
+                        }
+                    }
+                }
+                
+                return nearestEnemy;
+            }
+
+            shoot(targetX, targetY) {
+                const angle = Math.atan2(targetY - this.y, targetX - this.x);
+                const velocity = {
+                    x: Math.cos(angle) * BULLET_SPEED,
+                    y: Math.sin(angle) * BULLET_SPEED
+                };
+                entities.bullets.push(new Bullet(
+                    this.x, 
+                    this.y, 
+                    velocity.x,
+                    velocity.y,
+                    this.team,
+                    this
+                ));
+            }
+        }
+
+        class Bullet {
+            constructor(x, y, velocityX, velocityY, team, source) {
+                this.x = x;
+                this.y = y;
+                this.velocityX = velocityX;
+                this.velocityY = velocityY;
+                this.team = team;
+                this.radius = BULLET_RADIUS;
+                this.color = team === 1 ? COLOR_TEAM_1 : COLOR_TEAM_2;
+                this.source = source; // Who fired the bullet
+                this.damage = 10;
+                this.toRemove = false;
+            }
+
+            update() {
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+
+                // Check if bullet is out of bounds
+                if (
+                    this.x < 0 ||
+                    this.x > GAME_WIDTH ||
+                    this.y < 0 ||
+                    this.y > GAME_HEIGHT
+                ) {
+                    this.toRemove = true;
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x - camera.x, this.y - camera.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+        }
+
+        // Game initialization
+        function initGame() {
+            // Create player (team 1)
+            entities.player = new Player(GAME_WIDTH / 4, GAME_HEIGHT / 2, 1);
+            
+            // Create bots with initial positions that avoid overlapping
+            const placedPositions = [];
+            const minDistance = BOT_RADIUS * 2.5;
+            
+            // First place some bots near respawn circles for each team (for defense)
+            function placeBotsNearCircle(circle, team, count, role = 'occupier') {
+                for (let i = 0; i < count; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = Math.random() * RESPAWN_CIRCLE_RADIUS * 0.8;
+                    const x = circle.x + Math.cos(angle) * distance;
+                    const y = circle.y + Math.sin(angle) * distance;
+                    
+                    // Check if position is valid
+                    let validPosition = true;
+                    for (const pos of placedPositions) {
+                        const dist = Math.hypot(pos.x - x, pos.y - y);
+                        if (dist < minDistance) {
+                            validPosition = false;
+                            break;
+                        }
+                    }
+                    
+                    if (validPosition) {
+                        placedPositions.push({ x, y });
+                        const bot = new Bot(x, y, team);
+                        bot.role = role; // Assign the specified role
+                        bot.captureIntent = role === 'capture-squad' ? true : bot.captureIntent;
+                        
+                        // Set their circle to occupy
+                        if (team === 1) {
+                            if (role === 'capture-squad') {
+                                // Capture squads target enemy circles
+                                const enemyCircleIndex = i % RESPAWN_CIRCLES_2.length;
+                                bot.occupyingCircle = RESPAWN_CIRCLES_2[enemyCircleIndex];
+                                bot.occupyingCircleTeam = 2;
+                                bot.occupyingCircleIndex = enemyCircleIndex;
+                            } else {
+                                // Defenders target own circles
+                                bot.occupyingCircle = RESPAWN_CIRCLES_1.find(c => c.x === circle.x && c.y === circle.y);
+                                bot.occupyingCircleTeam = 1;
+                                bot.occupyingCircleIndex = RESPAWN_CIRCLES_1.indexOf(bot.occupyingCircle);
+                            }
+                        } else {
+                            if (role === 'capture-squad') {
+                                // Capture squads target enemy circles
+                                const enemyCircleIndex = i % RESPAWN_CIRCLES_1.length;
+                                bot.occupyingCircle = RESPAWN_CIRCLES_1[enemyCircleIndex];
+                                bot.occupyingCircleTeam = 1;
+                                bot.occupyingCircleIndex = enemyCircleIndex;
+                            } else {
+                                // Defenders target own circles
+                                bot.occupyingCircle = RESPAWN_CIRCLES_2.find(c => c.x === circle.x && c.y === circle.y);
+                                bot.occupyingCircleTeam = 2;
+                                bot.occupyingCircleIndex = RESPAWN_CIRCLES_2.indexOf(bot.occupyingCircle);
+                            }
+                        }
+                        
+                        entities.bots.push(bot);
+                    }
+                }
+            }
+            
+            // Place 3-4 bots near each respawn circle for defense
+            for (const circle of RESPAWN_CIRCLES_1) {
+                placeBotsNearCircle(circle, 1, Math.floor(3 + Math.random() * 2));
+            }
+            
+            for (const circle of RESPAWN_CIRCLES_2) {
+                placeBotsNearCircle(circle, 2, Math.floor(3 + Math.random() * 2));
+            }
+            
+            // Create dedicated capture squads for both teams
+            for (let i = 0; i < 3; i++) {
+                // Team 1 capture squad - 4-6 bots per enemy circle
+                const team1CaptureCount = Math.floor(4 + Math.random() * 3);
+                placeBotsNearCircle(RESPAWN_CIRCLES_1[i % RESPAWN_CIRCLES_1.length], 1, team1CaptureCount, 'capture-squad');
+                
+                // Team 2 capture squad - 4-6 bots per enemy circle
+                const team2CaptureCount = Math.floor(4 + Math.random() * 3);
+                placeBotsNearCircle(RESPAWN_CIRCLES_2[i % RESPAWN_CIRCLES_2.length], 2, team2CaptureCount, 'capture-squad');
+            }
+            
+            // Create remaining bots for team 1 to total BOTS_PER_TEAM_1
+            const botsToCreateTeam1 = BOTS_PER_TEAM_1 - entities.bots.filter(b => b.team === 1).length;
+            
+            for (let i = 0; i < botsToCreateTeam1; i++) {
+                let validPosition = false;
+                let x, y;
+                
+                // Try to find a non-overlapping position
+                let attempts = 0;
+                while (!validPosition && attempts < 50) {
+                    x = Math.random() * (GAME_WIDTH / 2);
+                    y = Math.random() * GAME_HEIGHT;
+                    validPosition = true;
+                    
+                    // Check against existing positions
+                    for (const pos of placedPositions) {
+                        const distance = Math.hypot(pos.x - x, pos.y - y);
+                        if (distance < minDistance) {
+                            validPosition = false;
+                            break;
+                        }
+                    }
+                    attempts++;
+                }
+                
+                // Add the position to our list
+                placedPositions.push({ x, y });
+                entities.bots.push(new Bot(x, y, 1));
+            }
+
+            // Create remaining bots for team 2 to total BOTS_PER_TEAM_2
+            const botsToCreateTeam2 = BOTS_PER_TEAM_2 - entities.bots.filter(b => b.team === 2).length;
+            
+            for (let i = 0; i < botsToCreateTeam2; i++) {
+                let validPosition = false;
+                let x, y;
+                
+                let attempts = 0;
+                while (!validPosition && attempts < 50) {
+                    x = Math.random() * (GAME_WIDTH / 2) + GAME_WIDTH / 2;
+                    y = Math.random() * GAME_HEIGHT;
+                    validPosition = true;
+                    
+                    for (const pos of placedPositions) {
+                        const distance = Math.hypot(pos.x - x, pos.y - y);
+                        if (distance < minDistance) {
+                            validPosition = false;
+                            break;
+                        }
+                    }
+                    attempts++;
+                }
+                
+                placedPositions.push({ x, y });
+                entities.bots.push(new Bot(x, y, 2));
+            }
+            
+            // Set up mobile controls if needed
+            initTouchControls();
+        }
+
+        // Game loop
+        function gameLoop(currentTime) {
+            if (!lastTime) lastTime = currentTime;
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            // Clear canvas
+            ctx.fillStyle = COLOR_BACKGROUND;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Update game state
+            if (!gameOver) {
+                updateGameState(currentTime);
+                
+                // Check capture progress every 100ms
+                if (currentTime - lastCaptureCheck > 100) {
+                    checkCaptureProgress(currentTime);
+                    lastCaptureCheck = currentTime;
+                }
+                
+                // Update respawn timer if player is dead
+                updateRespawnTimer();
+            }
+
+            // Draw game elements
+            drawGame();
+            
+            // Draw minimap
+            drawMinimap();
+
+            // Update team counts
+            updateTeamCounts();
+            
+            // Check for respawns
+            checkRespawns();
+            
+            // Check if game is over
+            checkGameOver();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function drawMinimap() {
+            // Clear minimap
+            minimapCtx.fillStyle = COLOR_BACKGROUND;
+            minimapCtx.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+            
+            // Calculate scale factor for minimap
+            const scaleX = minimapCanvas.width / GAME_WIDTH;
+            const scaleY = minimapCanvas.height / GAME_HEIGHT;
+            
+            // Draw game border
+            minimapCtx.strokeStyle = COLOR_BORDER;
+            minimapCtx.strokeRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+            
+            // Draw player
+            if (entities.player && !entities.player.dead) {
+                minimapCtx.beginPath();
+                minimapCtx.arc(
+                    entities.player.x * scaleX, 
+                    entities.player.y * scaleY, 
+                    3, 0, Math.PI * 2
+                );
+                minimapCtx.fillStyle = COLOR_TEAM_1;
+                minimapCtx.fill();
+            }
+            
+            // Draw bots
+            for (const bot of entities.bots) {
+                if (!bot.dead) {
+                    minimapCtx.beginPath();
+                    minimapCtx.arc(
+                        bot.x * scaleX, 
+                        bot.y * scaleY, 
+                        2, 0, Math.PI * 2
+                    );
+                    minimapCtx.fillStyle = bot.team === 1 ? COLOR_TEAM_1 : COLOR_TEAM_2;
+                    minimapCtx.fill();
+                }
+            }
+            
+            // Draw current viewport
+            minimapCtx.strokeStyle = COLOR_VIEWPORT;
+            minimapCtx.lineWidth = 2;
+            minimapCtx.strokeRect(
+                camera.x * scaleX,
+                camera.y * scaleY,
+                canvas.width * scaleX,
+                canvas.height * scaleY
+            );
+            
+            // Draw all respawn circles on minimap
+            // Team 1 respawn circles
+            for (let i = 0; i < RESPAWN_CIRCLES_1.length; i++) {
+                const circle = RESPAWN_CIRCLES_1[i];
+                
+                minimapCtx.beginPath();
+                minimapCtx.arc(
+                    circle.x * scaleX,
+                    circle.y * scaleY,
+                    RESPAWN_CIRCLE_RADIUS * scaleX,
+                    0, Math.PI * 2
+                );
+                
+                // Color based on captured status
+                if (circle.captured) {
+                    minimapCtx.strokeStyle = COLOR_TEAM_2;
+                    minimapCtx.fillStyle = COLOR_TEAM_2_STRONG;
+                    minimapCtx.fill();
+                } else {
+                    // Change outline color based on whether the circle is clear of enemies
+                    const circleClear = isRespawnCircleClearOfEnemies(1, i);
+                    minimapCtx.strokeStyle = circleClear ? COLOR_TEAM_1 : COLOR_WARNING;
+                    
+                    // If being captured, show progress
+                    if (circle.captureProgress > 0) {
+                        minimapCtx.beginPath();
+                        minimapCtx.arc(
+                            circle.x * scaleX,
+                            circle.y * scaleY,
+                            RESPAWN_CIRCLE_RADIUS * scaleX,
+                            -Math.PI/2,
+                            -Math.PI/2 + (Math.PI * 2 * circle.captureProgress / MAX_CAPTURE_PROGRESS)
+                        );
+                        minimapCtx.lineTo(circle.x * scaleX, circle.y * scaleY);
+                        minimapCtx.closePath();
+                        minimapCtx.fillStyle = COLOR_TEAM_2_STRONG;
+                        minimapCtx.fill();
+                    }
+                }
+                
+                minimapCtx.lineWidth = 1;
+                minimapCtx.stroke();
+            }
+            
+            // Team 2 respawn circles
+            for (let i = 0; i < RESPAWN_CIRCLES_2.length; i++) {
+                const circle = RESPAWN_CIRCLES_2[i];
+                
+                minimapCtx.beginPath();
+                minimapCtx.arc(
+                    circle.x * scaleX,
+                    circle.y * scaleY,
+                    RESPAWN_CIRCLE_RADIUS * scaleX,
+                    0, Math.PI * 2
+                );
+                
+                // Color based on captured status
+                if (circle.captured) {
+                    minimapCtx.strokeStyle = COLOR_TEAM_1;
+                    minimapCtx.fillStyle = COLOR_TEAM_1_STRONG;
+                    minimapCtx.fill();
+                } else {
+                    // Change outline color based on whether the circle is clear of enemies
+                    const circleClear = isRespawnCircleClearOfEnemies(2, i);
+                    minimapCtx.strokeStyle = circleClear ? COLOR_TEAM_2 : COLOR_WARNING;
+                    
+                    // If being captured, show progress
+                    if (circle.captureProgress > 0) {
+                        minimapCtx.beginPath();
+                        minimapCtx.arc(
+                            circle.x * scaleX,
+                            circle.y * scaleY,
+                            RESPAWN_CIRCLE_RADIUS * scaleX,
+                            -Math.PI/2,
+                            -Math.PI/2 + (Math.PI * 2 * circle.captureProgress / MAX_CAPTURE_PROGRESS)
+                        );
+                        minimapCtx.lineTo(circle.x * scaleX, circle.y * scaleY);
+                        minimapCtx.closePath();
+                        minimapCtx.fillStyle = COLOR_TEAM_1_STRONG;
+                        minimapCtx.fill();
+                    }
+                }
+                
+                minimapCtx.lineWidth = 1;
+                minimapCtx.stroke();
+            }
+        }
+
+        function updateGameState(currentTime) {
+            // Update player
+            if (entities.player && !entities.player.dead) {
+                entities.player.update(currentTime);
+            }
+
+            // Update bots
+            entities.bots.forEach(bot => bot.update(currentTime));
+
+            // Update bullets
+            entities.bullets.forEach(bullet => bullet.update());
+
+            // Handle collisions
+            handleCollisions();
+
+            // Remove dead bullets
+            entities.bullets = entities.bullets.filter(bullet => !bullet.toRemove);
+
+            // Remove dead bots
+            entities.bots = entities.bots.filter(bot => !bot.dead);
+        }
+
+        function drawGame() {
+            // Draw game boundary
+            ctx.strokeStyle = COLOR_BORDER;
+            ctx.strokeRect(-camera.x, -camera.y, GAME_WIDTH, GAME_HEIGHT);
+
+            // Draw grid for reference
+            ctx.strokeStyle = COLOR_GRID;
+            ctx.lineWidth = 1;
+            const gridSize = 100;
+            for (let x = 0; x < GAME_WIDTH; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x - camera.x, -camera.y);
+                ctx.lineTo(x - camera.x, GAME_HEIGHT - camera.y);
+                ctx.stroke();
+            }
+            for (let y = 0; y < GAME_HEIGHT; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(-camera.x, y - camera.y);
+                ctx.lineTo(GAME_WIDTH - camera.x, y - camera.y);
+                ctx.stroke();
+            }
+
+            // Draw all respawn circles with capture progress
+            // Team 1 respawn circles
+            for (let i = 0; i < RESPAWN_CIRCLES_1.length; i++) {
+                const circle = RESPAWN_CIRCLES_1[i];
+                
+                ctx.beginPath();
+                ctx.arc(
+                    circle.x - camera.x,
+                    circle.y - camera.y,
+                    RESPAWN_CIRCLE_RADIUS,
+                    0, Math.PI * 2
+                );
+                
+                // Color based on captured status
+                if (circle.captured) {
+                    ctx.strokeStyle = COLOR_TEAM_2;
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    ctx.fillStyle = COLOR_TEAM_2_MEDIUM;
+                    ctx.fill();
+                } else {
+                    // Change outline color based on whether the circle is clear of enemies
+                    const circleClear = isRespawnCircleClearOfEnemies(1, i);
+                    ctx.strokeStyle = circleClear ? COLOR_TEAM_1 : COLOR_WARNING; // Orange warning if not clear
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    
+                    // Fill with team color
+                    ctx.fillStyle = COLOR_TEAM_1_LIGHT; // Base color (very transparent)
+                    ctx.fill();
+                    
+                    // If being captured, show progress
+                    if (circle.captureProgress > 0) {
+                        // Draw capture progress as an arc overlay
+                        ctx.beginPath();
+                        ctx.arc(
+                            circle.x - camera.x,
+                            circle.y - camera.y,
+                            RESPAWN_CIRCLE_RADIUS,
+                            -Math.PI/2, 
+                            -Math.PI/2 + (Math.PI * 2 * circle.captureProgress / MAX_CAPTURE_PROGRESS)
+                        );
+                        ctx.lineTo(circle.x - camera.x, circle.y - camera.y);
+                        ctx.closePath();
+                        ctx.fillStyle = COLOR_TEAM_2_MEDIUM; // Enemy color with 40% opacity
+                        ctx.fill();
+                    }
+                }
+            }
+            
+            // Team 2 respawn circles
+            for (let i = 0; i < RESPAWN_CIRCLES_2.length; i++) {
+                const circle = RESPAWN_CIRCLES_2[i];
+                
+                ctx.beginPath();
+                ctx.arc(
+                    circle.x - camera.x,
+                    circle.y - camera.y,
+                    RESPAWN_CIRCLE_RADIUS,
+                    0, Math.PI * 2
+                );
+                
+                // Color based on captured status
+                if (circle.captured) {
+                    ctx.strokeStyle = COLOR_TEAM_1;
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    ctx.fillStyle = COLOR_TEAM_1_MEDIUM;
+                    ctx.fill();
+                } else {
+                    // Change outline color based on whether the circle is clear of enemies
+                    const circleClear = isRespawnCircleClearOfEnemies(2, i);
+                    ctx.strokeStyle = circleClear ? COLOR_TEAM_2 : COLOR_WARNING; // Orange warning if not clear
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    
+                    // Fill with team color
+                    ctx.fillStyle = COLOR_TEAM_2_LIGHT; // Base color (very transparent)
+                    ctx.fill();
+                    
+                    // If being captured, show progress
+                    if (circle.captureProgress > 0) {
+                        // Draw capture progress as an arc overlay
+                        ctx.beginPath();
+                        ctx.arc(
+                            circle.x - camera.x,
+                            circle.y - camera.y,
+                            RESPAWN_CIRCLE_RADIUS,
+                            -Math.PI/2, 
+                            -Math.PI/2 + (Math.PI * 2 * circle.captureProgress / MAX_CAPTURE_PROGRESS)
+                        );
+                        ctx.lineTo(circle.x - camera.x, circle.y - camera.y);
+                        ctx.closePath();
+                        ctx.fillStyle = COLOR_TEAM_1_MEDIUM; // Enemy color with 40% opacity
+                        ctx.fill();
+                    }
+                }
+            }
+
+            // Draw bullets
+            entities.bullets.forEach(bullet => bullet.draw());
+
+            // Draw player
+            if (entities.player && !entities.player.dead) {
+                entities.player.draw();
+            }
+
+            // Draw bots
+            entities.bots.forEach(bot => bot.draw());
+        }
+
+        function handleCollisions() {
+            // Check bullet collisions
+            for (const bullet of entities.bullets) {
+                // Check collision with player
+                if (
+                    entities.player &&
+                    !entities.player.dead &&
+                    bullet.team !== entities.player.team &&
+                    bullet.source !== entities.player
+                ) {
+                    const distance = Math.hypot(
+                        bullet.x - entities.player.x,
+                        bullet.y - entities.player.y
+                    );
+                    if (distance < entities.player.radius + bullet.radius) {
+                        entities.player.takeDamage(bullet.damage);
+                        bullet.toRemove = true;
+                    }
+                }
+
+                // Check collision with bots
+                for (const bot of entities.bots) {
+                    if (!bot.dead && bullet.team !== bot.team && bullet.source !== bot) {
+                        const distance = Math.hypot(
+                            bullet.x - bot.x,
+                            bullet.y - bot.y
+                        );
+                        if (distance < bot.radius + bullet.radius) {
+                            bot.takeDamage(bullet.damage);
+                            bullet.toRemove = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        function updateTeamCounts() {
+            let team1Count = entities.bots.filter(bot => bot.team === 1 && !bot.dead).length;
+            let team2Count = entities.bots.filter(bot => bot.team === 2 && !bot.dead).length;
+            
+            // Add player to team1 count if alive
+            if (entities.player && !entities.player.dead) {
+                team1Count++;
+            }
+
+            document.getElementById('team1-count').textContent = team1Count;
+            document.getElementById('team2-count').textContent = team2Count;
+        }
+
+        // Function to check and update capture progress
+        function checkCaptureProgress(currentTime) {
+            // Update capture progress for each circle
+            
+            // Team 1 attempting to capture Team 2's circles
+            for (let i = 0; i < RESPAWN_CIRCLES_2.length; i++) {
+                const circle = RESPAWN_CIRCLES_2[i];
+                if (circle.captured) continue; // Skip already captured circles
+                
+                // Count team 1 units in this circle
+                let team1InCircle = 0;
+                
+                // Check player
+                if (entities.player && !entities.player.dead && entities.player.team === 1) {
+                    const distanceToCircle = Math.hypot(
+                        entities.player.x - circle.x,
+                        entities.player.y - circle.y
+                    );
+                    if (distanceToCircle < RESPAWN_CIRCLE_RADIUS) {
+                        team1InCircle++;
+                    }
+                }
+                
+                // Check team 1 bots
+                for (const bot of entities.bots) {
+                    if (bot.dead || bot.team !== 1) continue;
+                    
+                    const distanceToCircle = Math.hypot(
+                        bot.x - circle.x,
+                        bot.y - circle.y
+                    );
+                    if (distanceToCircle < RESPAWN_CIRCLE_RADIUS) {
+                        team1InCircle++;
+                    }
+                }
+                
+                // Check if team 1's base circles are safe
+                const allTeam1CirclesSafe = RESPAWN_CIRCLES_1.every((c, idx) => 
+                    !c.captured && isRespawnCircleClearOfEnemies(1, idx)
+                );
+                
+                // Update capture progress
+                if (team1InCircle >= CAPTURE_UNITS_REQUIRED && allTeam1CirclesSafe) {
+                    circle.captureProgress += (100 / (CAPTURE_TIME / 100)); // Increase by percentage per 100ms
+                    if (circle.captureProgress >= MAX_CAPTURE_PROGRESS) {
+                        circle.captured = true;
+                        circle.captureProgress = MAX_CAPTURE_PROGRESS;
+                        captureProgress.team1Captured++;
+                    }
+                } else {
+                    // Decrease capture progress if not enough units or base not secure
+                    circle.captureProgress = Math.max(0, circle.captureProgress - (100 / (CAPTURE_TIME / 200)));
+                }
+            }
+            
+            // Team 2 attempting to capture Team 1's circles
+            for (let i = 0; i < RESPAWN_CIRCLES_1.length; i++) {
+                const circle = RESPAWN_CIRCLES_1[i];
+                if (circle.captured) continue; // Skip already captured circles
+                
+                // Count team 2 units in this circle
+                let team2InCircle = 0;
+                
+                // Check team 2 bots
+                for (const bot of entities.bots) {
+                    if (bot.dead || bot.team !== 2) continue;
+                    
+                    const distanceToCircle = Math.hypot(
+                        bot.x - circle.x,
+                        bot.y - circle.y
+                    );
+                    if (distanceToCircle < RESPAWN_CIRCLE_RADIUS) {
+                        team2InCircle++;
+                    }
+                }
+                
+                // Check if team 2's base circles are safe
+                const allTeam2CirclesSafe = RESPAWN_CIRCLES_2.every((c, idx) => 
+                    !c.captured && isRespawnCircleClearOfEnemies(2, idx)
+                );
+                
+                // Update capture progress
+                if (team2InCircle >= CAPTURE_UNITS_REQUIRED && allTeam2CirclesSafe) {
+                    circle.captureProgress += (100 / (CAPTURE_TIME / 100)); // Increase by percentage per 100ms
+                    if (circle.captureProgress >= MAX_CAPTURE_PROGRESS) {
+                        circle.captured = true;
+                        circle.captureProgress = MAX_CAPTURE_PROGRESS;
+                        captureProgress.team2Captured++;
+                    }
+                } else {
+                    // Decrease capture progress if not enough units or base not secure
+                    circle.captureProgress = Math.max(0, circle.captureProgress - (100 / (CAPTURE_TIME / 200)));
+                }
+            }
+            
+            // Update UI
+            document.getElementById('team1-capture').textContent = 
+                `${captureProgress.team1Captured}/${RESPAWN_CIRCLES_2.length} bases`;
+            document.getElementById('team2-capture').textContent = 
+                `${captureProgress.team2Captured}/${RESPAWN_CIRCLES_1.length} bases`;
+            
+            // Update status messages
+            const team1StatusElement = document.getElementById('team1-status');
+            const team2StatusElement = document.getElementById('team2-status');
+            
+            // Show appropriate status messages
+            const allTeam1CirclesSafe = RESPAWN_CIRCLES_1.every((c, idx) => 
+                !c.captured && isRespawnCircleClearOfEnemies(1, idx)
+            );
+            
+            const allTeam2CirclesSafe = RESPAWN_CIRCLES_2.every((c, idx) => 
+                !c.captured && isRespawnCircleClearOfEnemies(2, idx)
+            );
+            
+            team1StatusElement.textContent = allTeam1CirclesSafe ? '' : '(Base under attack!)';
+            team2StatusElement.textContent = allTeam2CirclesSafe ? '' : '(Base under attack!)';
+        }
+        
+        // Check if a team's respawn circle is clear of enemy units
+        function isRespawnCircleClearOfEnemies(teamNumber, circleIndex) {
+            const respawnCircles = teamNumber === 1 ? RESPAWN_CIRCLES_1 : RESPAWN_CIRCLES_2;
+            const circle = respawnCircles[circleIndex];
+            
+            // Check if player is in enemy respawn circle
+            if (entities.player && !entities.player.dead && entities.player.team !== teamNumber) {
+                const distanceToPlayer = Math.hypot(
+                    circle.x - entities.player.x,
+                    circle.y - entities.player.y
+                );
+                if (distanceToPlayer < RESPAWN_CIRCLE_RADIUS) {
+                    return false;
+                }
+            }
+            
+            // Check if any enemy bots are in the respawn circle
+            for (const bot of entities.bots) {
+                if (!bot.dead && bot.team !== teamNumber) {
+                    const distance = Math.hypot(
+                        circle.x - bot.x,
+                        circle.y - bot.y
+                    );
+                    if (distance < RESPAWN_CIRCLE_RADIUS) {
+                        return false;
+                    }
+                }
+            }
+            
+            return true;
+        }
+        
+        // Check if respawn circle is safe (no enemies inside)
+        function isRespawnCircleSafe(teamNumber) {
+            // Check own team's uncaptured circles
+            const ownCircles = teamNumber === 1 ? RESPAWN_CIRCLES_1 : RESPAWN_CIRCLES_2;
+            const enemyCircles = teamNumber === 1 ? RESPAWN_CIRCLES_2 : RESPAWN_CIRCLES_1;
+            
+            // Check each uncaptured circle from own team
+            for (let i = 0; i < ownCircles.length; i++) {
+                if (!ownCircles[i].captured && isRespawnCircleClearOfEnemies(teamNumber, i)) {
+                    return true;
+                }
+            }
+            
+            // Also check enemy circles that have been captured by our team
+            for (let i = 0; i < enemyCircles.length; i++) {
+                if (enemyCircles[i].captured && isRespawnCircleClearOfEnemies(3 - teamNumber, i)) {
+                    // Note: 3 - teamNumber gives us the opposite team (1->2, 2->1)
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        // Check for and handle bot respawns
+        function checkRespawns() {
+            const currentTime = Date.now();
+            const botsToRespawn = [];
+            
+            // Check each dead bot
+            for (let i = entities.deadBots.length - 1; i >= 0; i--) {
+                const deadBot = entities.deadBots[i];
+                
+                // If enough time has passed since death
+                if (currentTime - deadBot.timeOfDeath >= RESPAWN_TIME) {
+                    // Check if any respawn area is safe
+                    if (isRespawnCircleSafe(deadBot.bot.team)) {
+                        botsToRespawn.push(deadBot);
+                        entities.deadBots.splice(i, 1); // Remove from dead bots list
+                    }
+                }
+            }
+            
+            // Respawn bots
+            for (const botInfo of botsToRespawn) {
+                const teamNumber = botInfo.bot.team;
+                
+                // Get both own uncaptured circles and enemy captured circles
+                const ownCircles = teamNumber === 1 ? RESPAWN_CIRCLES_1 : RESPAWN_CIRCLES_2;
+                const enemyCircles = teamNumber === 1 ? RESPAWN_CIRCLES_2 : RESPAWN_CIRCLES_1;
+                
+                // Collect all available respawn locations
+                const availableCircles = [];
+                
+                // Add own uncaptured circles that are clear of enemies
+                for (let i = 0; i < ownCircles.length; i++) {
+                    if (!ownCircles[i].captured && isRespawnCircleClearOfEnemies(teamNumber, i)) {
+                        availableCircles.push(ownCircles[i]);
+                    }
+                }
+                
+                // Add enemy captured circles that are clear of enemies
+                for (let i = 0; i < enemyCircles.length; i++) {
+                    if (enemyCircles[i].captured && isRespawnCircleClearOfEnemies(3 - teamNumber, i)) {
+                        availableCircles.push(enemyCircles[i]);
+                    }
+                }
+                
+                if (availableCircles.length > 0) {
+                    // Choose a random available circle
+                    const respawnCircle = availableCircles[Math.floor(Math.random() * availableCircles.length)];
+                    
+                    // Respawn at a random position within the respawn circle
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = Math.random() * (RESPAWN_CIRCLE_RADIUS - BOT_RADIUS);
+                    const x = respawnCircle.x + Math.cos(angle) * distance;
+                    const y = respawnCircle.y + Math.sin(angle) * distance;
+                    
+                    // Create a new bot and add it to the bots list
+                    const newBot = new Bot(x, y, botInfo.bot.team);
+                    entities.bots.push(newBot);
+                }
+            }
+            
+            // Check if player needs to respawn
+            if (playerRespawn.dead && entities.player) {
+                // If enough time has passed since death
+                if (currentTime - playerRespawn.timeOfDeath >= RESPAWN_TIME) {
+                    // Check if any respawn area is safe
+                    if (isRespawnCircleSafe(entities.player.team)) {
+                        const teamNumber = entities.player.team;
+                        
+                        // Get both own uncaptured circles and enemy captured circles
+                        const ownCircles = teamNumber === 1 ? RESPAWN_CIRCLES_1 : RESPAWN_CIRCLES_2;
+                        const enemyCircles = teamNumber === 1 ? RESPAWN_CIRCLES_2 : RESPAWN_CIRCLES_1;
+                        
+                        // Collect all available respawn locations
+                        const availableCircles = [];
+                        
+                        // Add own uncaptured circles that are clear of enemies
+                        for (let i = 0; i < ownCircles.length; i++) {
+                            if (!ownCircles[i].captured && isRespawnCircleClearOfEnemies(teamNumber, i)) {
+                                availableCircles.push(ownCircles[i]);
+                            }
+                        }
+                        
+                        // Add enemy captured circles that are clear of enemies
+                        for (let i = 0; i < enemyCircles.length; i++) {
+                            if (enemyCircles[i].captured && isRespawnCircleClearOfEnemies(3 - teamNumber, i)) {
+                                availableCircles.push(enemyCircles[i]);
+                            }
+                        }
+                        
+                        if (availableCircles.length > 0) {
+                            // Choose a random available circle
+                            const respawnCircle = availableCircles[Math.floor(Math.random() * availableCircles.length)];
+                            
+                            // Respawn at a random position within the respawn circle
+                            const angle = Math.random() * Math.PI * 2;
+                            const distance = Math.random() * (RESPAWN_CIRCLE_RADIUS - PLAYER_RADIUS);
+                            entities.player.x = respawnCircle.x + Math.cos(angle) * distance;
+                            entities.player.y = respawnCircle.y + Math.sin(angle) * distance;
+                            
+                            // Reset player state
+                            entities.player.health = 100;
+                            entities.player.dead = false;
+                            playerRespawn.dead = false;
+                            
+                            // Reset camera to player position
+                            camera.x = entities.player.x - canvas.width / 2;
+                            camera.y = entities.player.y - canvas.height / 2;
+                            
+                            // Update health display
+                            document.getElementById('player-health').textContent = entities.player.health;
+                            
+                            // Hide respawn timer
+                            document.getElementById('respawn-timer').style.display = 'none';
+                        }
+                    }
+                }
+            }
+        }
+
+        // Function to update the respawn timer display
+        function updateRespawnTimer() {
+            const respawnTimerElement = document.getElementById('respawn-timer');
+            
+            if (playerRespawn.dead && entities.player) {
+                // Calculate remaining time in seconds
+                const currentTime = Date.now();
+                const elapsedTime = currentTime - playerRespawn.timeOfDeath;
+                const remainingTime = Math.max(0, Math.ceil((RESPAWN_TIME - elapsedTime) / 1000));
+                
+                // Update timer display
+                document.getElementById('respawn-seconds').textContent = remainingTime;
+                
+                // Show timer
+                respawnTimerElement.style.display = 'block';
+                
+                // If respawn is almost ready, check if respawn area is safe
+                if (remainingTime === 0) {
+                    if (isRespawnCircleSafe(entities.player.team)) {
+                        document.getElementById('respawn-seconds').textContent = "Ready";
+                    } else {
+                        document.getElementById('respawn-seconds').textContent = "Waiting for safe area...";
+                    }
+                }
+            } else {
+                // Hide timer when player is alive
+                respawnTimerElement.style.display = 'none';
+            }
+        }
+
+        // Add the missing function to check game over conditions
+        function checkGameOver() {
+            // Check if one team has captured all of the other team's circles
+            const allTeam1CirclesCaptured = RESPAWN_CIRCLES_1.every(circle => circle.captured);
+            const allTeam2CirclesCaptured = RESPAWN_CIRCLES_2.every(circle => circle.captured);
+            
+            // Also check for complete elimination
+            const team1Count = entities.bots.filter(bot => bot.team === 1 && !bot.dead).length + 
+                             (entities.player && !entities.player.dead ? 1 : 0);
+            const team2Count = entities.bots.filter(bot => bot.team === 2 && !bot.dead).length;
+            
+            const team1NoRespawnAvailable = RESPAWN_CIRCLES_1.every(circle => circle.captured);
+            const team2NoRespawnAvailable = RESPAWN_CIRCLES_2.every(circle => circle.captured);
+            
+            if (allTeam1CirclesCaptured || allTeam2CirclesCaptured || 
+                (team1Count === 0 && team1NoRespawnAvailable) || 
+                (team2Count === 0 && team2NoRespawnAvailable)) {
+                
+                gameOver = true;
+                
+                // Draw game over message
+                ctx.fillStyle = COLOR_GAME_OVER_BG;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = COLOR_TEXT;
+                ctx.font = '48px Arial';
+                ctx.textAlign = 'center';
+                
+                let winMessage = '';
+                if (allTeam1CirclesCaptured || (team1Count === 0 && team1NoRespawnAvailable)) {
+                    winMessage = 'Team 2 Wins!';
+                    if (allTeam1CirclesCaptured) {
+                        winMessage += ' (All Bases Captured)';
+                    }
+                } else {
+                    winMessage = 'Team 1 Wins!';
+                    if (allTeam2CirclesCaptured) {
+                        winMessage += ' (All Bases Captured)';
+                    }
+                }
+                
+                ctx.fillText(winMessage, canvas.width / 2, canvas.height / 2);
+                ctx.font = '24px Arial';
+                ctx.fillText('Refresh to play again', canvas.width / 2, canvas.height / 2 + 60);
+            }
+        }
+
+        // Helper function to count units of a specific team in a circle
+        function countUnitsInCircle(circle, team) {
+            let count = 0;
+            
+            // Count player
+            if (entities.player && !entities.player.dead && entities.player.team === team) {
+                const distance = Math.hypot(
+                    entities.player.x - circle.x,
+                    entities.player.y - circle.y
+                );
+                if (distance < RESPAWN_CIRCLE_RADIUS) {
+                    count++;
+                }
+            }
+            
+            // Count bots
+            for (const bot of entities.bots) {
+                if (!bot.dead && bot.team === team) {
+                    const distance = Math.hypot(
+                        bot.x - circle.x,
+                        bot.y - circle.y
+                    );
+                    if (distance < RESPAWN_CIRCLE_RADIUS) {
+                        count++;
+                    }
+                }
+            }
+            
+            return count;
+        }
+        
+        // Helper function to count enemy units near a circle
+        function countEnemyUnitsNearCircle(circle, friendlyTeam, radius) {
+            const enemyTeam = friendlyTeam === 1 ? 2 : 1;
+            let count = 0;
+            
+            // Count player
+            if (entities.player && !entities.player.dead && entities.player.team === enemyTeam) {
+                const distance = Math.hypot(
+                    entities.player.x - circle.x,
+                    entities.player.y - circle.y
+                );
+                if (distance < radius) {
+                    count++;
+                }
+            }
+            
+            // Count bots
+            for (const bot of entities.bots) {
+                if (!bot.dead && bot.team === enemyTeam) {
+                    const distance = Math.hypot(
+                        bot.x - circle.x,
+                        bot.y - circle.y
+                    );
+                    if (distance < radius) {
+                        count++;
+                    }
+                }
+            }
+            
+            return count;
+        }
+
+        // Event listeners
+        window.addEventListener('keydown', (e) => {
+            switch (e.key.toLowerCase()) {
+                case 'w': keys.w = true; break;
+                case 'a': keys.a = true; break;
+                case 's': keys.s = true; break;
+                case 'd': keys.d = true; break;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            switch (e.key.toLowerCase()) {
+                case 'w': keys.w = false; break;
+                case 'a': keys.a = false; break;
+                case 's': keys.s = false; break;
+                case 'd': keys.d = false; break;
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            // Adjust mobile controls positioning if needed
+            if (isMobile) {
+                const joystick = document.getElementById('virtual-joystick');
+                
+                // Update positions if necessary based on new screen size
+                // This helps when device orientation changes
+                if (window.innerHeight > window.innerWidth) {
+                    // Portrait orientation
+                } else {
+                    // Landscape orientation
+                }
+            }
+        });
+
+        // Device detection
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // Mobile control variables
+        let joystickActive = false;
+        let joystickData = {
+            startX: 0,
+            startY: 0,
+            moveX: 0,
+            moveY: 0,
+            delta: { x: 0, y: 0 }
+        };
+        
+        // Show/hide mobile controls based on device
+        function setupMobileControls() {
+            const joystick = document.getElementById('virtual-joystick');
+            
+            if (isMobile) {
+                joystick.style.display = 'block';
+                
+                // Set up joystick controls
+                joystick.addEventListener('touchstart', handleJoystickStart);
+                joystick.addEventListener('touchmove', handleJoystickMove);
+                joystick.addEventListener('touchend', handleJoystickEnd);
+                
+                // Removed setup for shoot button
+            } else {
+                joystick.style.display = 'none';
+            }
+        }
+        
+        // Joystick touch handlers
+        function handleJoystickStart(e) {
+            e.preventDefault();
+            const joystick = document.getElementById('virtual-joystick');
+            const knob = document.getElementById('joystick-knob');
+            
+            // Get joystick position
+            const joystickRect = joystick.getBoundingClientRect();
+            joystickData.startX = joystickRect.left + joystickRect.width / 2;
+            joystickData.startY = joystickRect.top + joystickRect.height / 2;
+            
+            joystickActive = true;
+            
+            // Handle touch input
+            const touch = e.touches[0];
+            const touchX = touch.clientX;
+            const touchY = touch.clientY;
+            
+            handleJoystickPosition(touchX, touchY);
+        }
+        
+        function handleJoystickMove(e) {
+            if (!joystickActive) return;
+            e.preventDefault();
+            
+            const touch = e.touches[0];
+            const touchX = touch.clientX;
+            const touchY = touch.clientY;
+            
+            handleJoystickPosition(touchX, touchY);
+        }
+        
+        function handleJoystickEnd(e) {
+            e.preventDefault();
+            joystickActive = false;
+            
+            // Reset joystick knob position
+            const knob = document.getElementById('joystick-knob');
+            knob.style.transform = `translate(0px, 0px)`;
+            
+            // Reset movement
+            joystickData.delta = { x: 0, y: 0 };
+            keys.w = false;
+            keys.a = false;
+            keys.s = false;
+            keys.d = false;
+        }
+        
+        function handleJoystickPosition(touchX, touchY) {
+            const joystick = document.getElementById('virtual-joystick');
+            const knob = document.getElementById('joystick-knob');
+            const joystickRect = joystick.getBoundingClientRect();
+            
+            // Calculate the center of the joystick
+            const centerX = joystickRect.left + joystickRect.width / 2;
+            const centerY = joystickRect.top + joystickRect.height / 2;
+            
+            // Calculate delta from center
+            let deltaX = touchX - centerX;
+            let deltaY = touchY - centerY;
+            
+            // Limit joystick movement radius
+            const maxRadius = joystickRect.width / 2 - knob.offsetWidth / 2;
+            const distance = Math.hypot(deltaX, deltaY);
+            
+            if (distance > maxRadius) {
+                const angle = Math.atan2(deltaY, deltaX);
+                deltaX = Math.cos(angle) * maxRadius;
+                deltaY = Math.sin(angle) * maxRadius;
+            }
+            
+            // Move the joystick knob
+            knob.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+            
+            // Normalize delta for player movement (values between -1 and 1)
+            const normalizedDeltaX = deltaX / maxRadius;
+            const normalizedDeltaY = deltaY / maxRadius;
+            joystickData.delta = { x: normalizedDeltaX, y: normalizedDeltaY };
+            
+            // Convert to key presses for compatibility with existing code
+            const deadzone = 0.3;
+            keys.w = normalizedDeltaY < -deadzone;
+            keys.s = normalizedDeltaY > deadzone;
+            keys.a = normalizedDeltaX < -deadzone;
+            keys.d = normalizedDeltaX > deadzone;
+        }
+        
+        // Add tap-to-shoot functionality for mobile
+        function setupTapShoot() {
+            if (!isMobile) return;
+            
+            canvas.addEventListener('touchstart', function(e) {
+                // Check if touch is on joystick
+                const joystick = document.getElementById('virtual-joystick');
+                const joystickRect = joystick.getBoundingClientRect();
+                const touch = e.touches[0];
+                
+                // If touch is on joystick, don't shoot
+                if (touch.clientX >= joystickRect.left && touch.clientX <= joystickRect.right &&
+                    touch.clientY >= joystickRect.top && touch.clientY <= joystickRect.bottom) {
+                    return;
+                }
+                
+                e.preventDefault(); // Prevent default touch behavior
+                
+                // Check if the player can shoot
+                if (entities.player && !entities.player.dead && Date.now() - entities.player.lastShot > SHOOTING_COOLDOWN) {
+                    // Calculate touch position in game world
+                    const rect = canvas.getBoundingClientRect();
+                    const touchX = touch.clientX - rect.left;
+                    const touchY = touch.clientY - rect.top;
+                    
+                    // Convert to world coordinates
+                    const worldX = camera.x + touchX;
+                    const worldY = camera.y + touchY;
+                    
+                    // Shoot toward the touch position
+                    entities.player.shoot(worldX, worldY);
+                    entities.player.lastShot = Date.now();
+                }
+            });
+        }
+        
+        // Initialize touch controls
+        function initTouchControls() {
+            setupMobileControls();
+            setupTapShoot();
+        }
+        
+        // Prevent page scrolling on touch devices
+        document.body.addEventListener('touchmove', function(e) {
+            if (e.target.id === 'gameCanvas') {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        // Start the game
+        initGame();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
