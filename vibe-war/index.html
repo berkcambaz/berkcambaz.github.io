@@ -2031,46 +2031,9 @@
             keys.d = normalizedDeltaX > deadzone;
         }
         
-        // Add tap-to-shoot functionality for mobile
-        function setupTapShoot() {
-            if (!isMobile) return;
-            
-            canvas.addEventListener('touchstart', function(e) {
-                // Check if touch is on joystick
-                const joystick = document.getElementById('virtual-joystick');
-                const joystickRect = joystick.getBoundingClientRect();
-                const touch = e.touches[0];
-                
-                // If touch is on joystick, don't shoot
-                if (touch.clientX >= joystickRect.left && touch.clientX <= joystickRect.right &&
-                    touch.clientY >= joystickRect.top && touch.clientY <= joystickRect.bottom) {
-                    return;
-                }
-                
-                e.preventDefault(); // Prevent default touch behavior
-                
-                // Check if the player can shoot
-                if (entities.player && !entities.player.dead && Date.now() - entities.player.lastShot > SHOOTING_COOLDOWN) {
-                    // Calculate touch position in game world
-                    const rect = canvas.getBoundingClientRect();
-                    const touchX = touch.clientX - rect.left;
-                    const touchY = touch.clientY - rect.top;
-                    
-                    // Convert to world coordinates
-                    const worldX = camera.x + touchX;
-                    const worldY = camera.y + touchY;
-                    
-                    // Shoot toward the touch position
-                    entities.player.shoot(worldX, worldY);
-                    entities.player.lastShot = Date.now();
-                }
-            });
-        }
-        
         // Initialize touch controls
         function initTouchControls() {
             setupMobileControls();
-            setupTapShoot();
         }
         
         // Prevent page scrolling on touch devices
