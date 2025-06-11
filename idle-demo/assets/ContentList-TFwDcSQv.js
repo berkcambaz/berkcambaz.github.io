@@ -1,1 +1,0 @@
-import{l as t,F as s}from"./index--tMnp0QA.js";import{S as a}from"./ScrollArea-eUr5KL0o.js";function o({children:e,gap:r}){return t.jsx(a,{children:t.jsx(s,{justify:"center",gap:r??"md",style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(64px,max-content))"},children:e})})}export{o as C};
