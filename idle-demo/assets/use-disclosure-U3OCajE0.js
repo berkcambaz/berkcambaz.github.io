@@ -1,0 +1,1 @@
+import{r as s}from"./index-D2NeptHS.js";function k(o=!1,f){const{onOpen:e,onClose:r}={},[a,l]=s.useState(o),c=s.useCallback(()=>{l(t=>t||(e==null||e(),!0))},[e]),u=s.useCallback(()=>{l(t=>t&&(r==null||r(),!1))},[r]),n=s.useCallback(()=>{a?u():c()},[u,c,a]);return[a,{open:c,close:u,toggle:n}]}export{k as u};

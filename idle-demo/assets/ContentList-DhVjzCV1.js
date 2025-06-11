@@ -1,1 +1,0 @@
-import{j as t,S as s,F as a}from"./index-E1_DrKf7.js";function i({children:e,gap:r}){return t.jsx(s,{children:t.jsx(a,{justify:"center",gap:r??"md",style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(64px,max-content))"},children:e})})}export{i as C};
